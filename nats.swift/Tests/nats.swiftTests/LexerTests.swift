@@ -1,25 +1,27 @@
 //
-//  File.swift
+//  LexerTests.swift
 //  
 //
-//  Created by Hugo Lundin on 2020-04-06.
+//  Created by Hugo Lundin on 2020-04-14.
 //
 
 import XCTest
+import Foundation
 @testable import nats_swift
 
 final class LexerTests: XCTestCase {
-    func testPing() {
-        let lexer = Lexer("PING\r\n")
+    func testMessage() {
+        let lexer = Lexer(input: "MSG test.test 123 5\r\nhejsan sten\r\n")
+        let tokens = lexer.lex()
+        let parser = Parser(tokens: tokens)
+        let message = parser.parse()
         
-        guard let result = try? lexer.lex() else {
-            return assertionFailure()
-        }
-        
-        assert(result.count == 0)
+        assert(tokens.count > 0, "No lexed tokens")
+        assert(tokens.count == 5, "Invalid number of tokens")
+        assert(message != nil, "Message parsing failed")
     }
-
+    
     static var allTests = [
-        ("testPing", testPing),
+        ("testMessage", testMessage),
     ]
 }
