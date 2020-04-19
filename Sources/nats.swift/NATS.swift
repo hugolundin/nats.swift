@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import os.log
 
 public final class NATS {
     private let lexer = Lexer()
