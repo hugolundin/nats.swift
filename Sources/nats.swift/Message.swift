@@ -8,9 +8,10 @@
 import Foundation
 
 enum Message {
+    case ok
     case ping
     case pong
-    case msg(message: (subject: String, bytes: Int, payload: Data, sid: String, replyTo: String?))
+    case msg(subject: String, sid: String, replyTo: String? = nil, bytes: Int, payload: Data)
     case info(String)
     case error(String)
 }

@@ -1,2 +1,3 @@
 # nats.swift
-Swift client for NATS.
+
+A Swift library for using the NATS protocol.

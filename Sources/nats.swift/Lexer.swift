@@ -7,23 +7,6 @@
 
 import Foundation
 
-public enum Token: Equatable {
-    case op(Operator)
-    case string(String)
-    case payload(String)
-    case newline
-}
-
-public enum Operator: String, Equatable {
-    case info = "INFO"
-    case connect = "CONNECT"
-    case msg = "MSG"
-    case ok = "+OK"
-    case error = "-ERR"
-    case ping = "PING"
-    case pong = "PONG"
-}
-
 public final class Lexer {
     private let input: String
     private var index: String.Index

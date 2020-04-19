@@ -14,7 +14,7 @@ final class LexerTests: XCTestCase {
         let lexer = Lexer(input: "MSG test.test 123 5\r\nhejsan sten\r\n")
         let tokens = lexer.lex()
         let parser = Parser(tokens: tokens)
-        let message = parser.parse()
+        let message = try? parser.parse()
         
         assert(tokens.count > 0, "No lexed tokens")
         assert(tokens.count == 5, "Invalid number of tokens")
