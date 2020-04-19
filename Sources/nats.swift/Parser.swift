@@ -7,7 +7,6 @@
 
 import Foundation
 
-
 internal final class Parser {
     enum Error: Swift.Error {
         case unexpectedToken(Token)
@@ -17,11 +16,7 @@ internal final class Parser {
     }
     
     private var index = 0
-    private let tokens: [Token]
-    
-    public init(tokens: [Token]) {
-        self.tokens = tokens
-    }
+    private var tokens: [Token]
     
     private var currentToken: Token? {
         return index < tokens.count ? tokens[index] : nil
@@ -31,7 +26,14 @@ internal final class Parser {
         index += n
     }
     
-    public func parse() throws -> Message {
+    internal init() {
+        self.tokens = []
+    }
+    
+    internal func parse(tokens: [Token]) throws -> Message {
+        self.index = 0
+        self.tokens = tokens
+        
         let `operator` = try parseOperator()
         consumeToken()
         
@@ -101,7 +103,7 @@ internal final class Parser {
         return Message.msg(subject: subject, sid: sid, bytes: bytes, payload: payload)
     }
     
-    public func parseRequest() throws -> Message {
+    private func parseRequest() throws -> Message {
         let subject = try parseSubject()
         consumeToken()
 

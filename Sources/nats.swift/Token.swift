@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum Token: Equatable {
+internal enum Token: Equatable {
     case op(Operator)
     case string(String)
     case payload(String)

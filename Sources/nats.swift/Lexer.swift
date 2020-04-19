@@ -7,17 +7,39 @@
 
 import Foundation
 
-public final class Lexer {
-    private let input: String
+internal final class Lexer {
+    private var input: String
     private var index: String.Index
     
-    public init(input: String) {
+    internal init() {
+        self.input = ""
+        self.index = self.input.startIndex
+    }
+    
+    
+    internal func lex(input: String) -> [Token] {
         self.input = input
-        self.index = input.startIndex
+        self.index = self.input.startIndex
+        
+        var tokens = [Token]()
+        
+        while let token = advanceNextToken() {
+            tokens.append(token)
+        }
+        
+        return tokens
     }
     
     private var current: Character? {
         return index < input.endIndex ? input[index] : nil
+    }
+    
+    private var hasNext: Bool {
+        if index == input.endIndex {
+            return false
+        }
+        
+        return input.index(after: index) < input.endIndex
     }
     
     private func advanceIndex() {
@@ -38,7 +60,7 @@ public final class Lexer {
     private func readIdentifierOrNumber() -> String {
         var str = ""
         
-        while let c = current, (c.isAlphanumeric || c == "."), !c.isNewline {
+        while let c = current, !c.isSpace, !c.isNewline {
             str.append(c)
             advanceIndex()
         }
@@ -57,33 +79,24 @@ public final class Lexer {
                 
         if character.isNewline {
             advanceIndex()
-            let payload = readString()
-            advanceIndex()
             
-            return .payload(payload)
-        }
-        
-        if character.isAlphanumeric {
-            let value = readIdentifierOrNumber()
-            
-            if let op = Operator(rawValue: value) {
-                return .op(op)
+            if hasNext {
+                let payload = readString()
+                advanceIndex()
+                return .payload(payload)
             }
             
-            return .string(value)
+            return nil
         }
         
-        return nil
-    }
-    
-    public func lex() -> [Token] {
-        var tokens = [Token]()
         
-        while let token = advanceNextToken() {
-            tokens.append(token)
+        let value = readIdentifierOrNumber()
+            
+        if let op = Operator(rawValue: value) {
+            return .op(op)
         }
-        
-        return tokens
+            
+        return .string(value)
     }
 }
 

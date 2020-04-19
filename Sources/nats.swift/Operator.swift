@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum Operator: String, Equatable {
+internal enum Operator: String, Equatable {
     case info = "INFO"
     case msg = "MSG"
     case ok = "+OK"

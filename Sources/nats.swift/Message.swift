@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum Message {
+public enum Message {
     case ok
     case ping
     case pong
