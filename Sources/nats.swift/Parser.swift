@@ -1,204 +1,356 @@
 //
-//  File.swift
-//  
+//  NATSParser.swift
+//  nats.swift
 //
-//  Created by Hugo Lundin on 2020-04-07.
+//  Created by Hugo Lundin on 2020-04-27.
 //
 
 import Foundation
 
 internal final class Parser {
-    enum Error: Swift.Error {
-        case unexpectedToken(Token)
+    internal enum State {
+        case INITIAL
+        
+        case I
+        case IN
+        case INF
+        case INFO
+        case INFO_ARG
+        
+        case M
+        case MS
+        case MSG
+        case MSG_ARG
+        case MSG_PAYLOAD
+        
+        case P
+        case PI
+        case PIN
+        case PING
+        case PO
+        case PON
+        case PONG
+        
+        case PLUS
+        case PLUS_O
+        case PLUS_OK
+        
+        case MINUS
+        case MINUS_E
+        case MINUS_ER
+        case MINUS_ERR
+        case MINUS_ERR_ARG
+    }
+    
+    internal enum Error: Swift.Error {
+        case parseError
+        case unexpectedToken(Character)
         case unexpectedEOF
-        case unexpectedOperator(Operator)
-        case unexpectedPayload(String)
+        case unexpectedArgumentCount
+        case missingArgument
     }
     
-    private var index = 0
-    private var tokens: [Token]
-    
-    private var currentToken: Token? {
-        return index < tokens.count ? tokens[index] : nil
+    internal enum Message {
+        case ping
+        case pong
+        case msg(subject: String, sid: String, request: String? = nil, bytes: Int, payload: String)
+        case info(String)
+        case ok
+        case error(String)
     }
     
-    private func consumeToken(n: Int = 1) {
-        index += n
+    typealias Closure = (Message) -> Void
+    
+    private var state: State
+    private var buffer: String
+    private var closure: Closure
+    private var argumentBuffer = [""]
+    
+    private var subject: String? = nil
+    private var sid: String? = nil
+    private var request: String? = nil
+    private var bytes: Int? = nil
+    
+    internal init(state: State = .INITIAL, _ closure: @escaping Closure) {
+        self.state = state
+        self.buffer = ""
+        self.closure = closure
     }
     
-    internal init() {
-        self.tokens = []
-    }
-    
-    internal func parse(tokens: [Token]) throws -> Message {
-        self.index = 0
-        self.tokens = tokens
-        
-        let `operator` = try parseOperator()
-        consumeToken()
-        
-        switch `operator` {
-        case .info:
-            return try parseInfo()
-        case .msg:
-            return try parseMessage()
-        case .ok:
-            return .ok
-        case .error:
-            return try parseError()
-        case .ping:
-            return .ping
-        case .pong:
-            return .pong
-        default:
-            throw Error.unexpectedOperator(`operator`)
-        }
-    }
-    
-    private func parseInfo() throws -> Message {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
-        }
-        
-        guard case let .string(message) = token else {
-            throw Error.unexpectedToken(token)
-        }
-        
-        return .info(message)
-    }
-    
-    private func parseError() throws -> Message {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
-        }
-        
-        guard case let .string(message) = token else {
-            throw Error.unexpectedToken(token)
-        }
-        
-        return .error(message)
-    }
-    
-    private func parseMessage() throws -> Message {
-        if tokens.count < 5 {
-            throw Error.unexpectedEOF
-        }
-        
-        guard tokens.count == 5 else {
-            return try parseRequest()
-        }
-        
-        let subject = try parseSubject()
-        consumeToken()
-        
-        let sid = try parseSID()
-        consumeToken()
-        
-        let bytes = try parseBytes()
-        consumeToken()
-        
-        let payload = try parsePayload()
-        consumeToken()
-        
-        return Message.msg(subject: subject, sid: sid, bytes: bytes, payload: payload)
-    }
-    
-    private func parseRequest() throws -> Message {
-        let subject = try parseSubject()
-        consumeToken()
+    internal func parse(input: String) throws {
 
-        let sid = try parseSID()
-        consumeToken()
-        
-        let replyTo = try parseReplyTo()
-        consumeToken()
-        
-        let bytes = try parseBytes()
-        consumeToken()
-        
-        let payload = try parsePayload()
-        consumeToken()
-        
-        return Message.msg(subject: subject, sid: sid, replyTo: replyTo, bytes: bytes, payload: payload)
+        for current in input {
+            switch state {
+            case .INITIAL:
+                switch current {
+                case "I", "i":
+                state = .I
+                
+                case "M", "m":
+                    state = .M
+                    
+                case "P", "p":
+                    state = .P
+                    
+                case "+":
+                    state = .PLUS
+                    
+                case "-":
+                    state = .MINUS
+                    
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .I:
+                switch current {
+                case "N", "n":
+                    state = .IN
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .IN:
+                switch current {
+                case "F", "f":
+                    state = .INF
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .INF:
+                switch current {
+                case "O", "o":
+                    state = .INFO
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .INFO:
+                if current.isSpace {
+                    state = .INFO_ARG
+                } else {
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .INFO_ARG:
+                if current.isNewline {
+                    self.closure(.info(buffer))
+                } else {
+                    self.buffer.append(current)
+                }
+                
+            case .M:
+                switch current {
+                case "S", "s":
+                    state = .MS
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MS:
+                switch current {
+                case "G", "g":
+                    state = .MSG
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MSG:
+                if current.isSpace {
+                    state = .MSG_ARG
+                } else {
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MSG_ARG:
+                if current.isNewline {
+                    try self.argument(argumentBuffer)
+                    state = .MSG_PAYLOAD
+                } else if current.isSpace {
+                    argumentBuffer.append("")
+                } else {
+                    argumentBuffer[argumentBuffer.count - 1].append(current)
+                }
+                
+            case .MSG_PAYLOAD:
+                if current.isNewline {
+                    try self.message(buffer)
+                    self.reset()
+                } else {
+                    self.buffer.append(current)
+                }
+                
+            case .P:
+                switch current {
+                case "I", "i":
+                    state = .PI
+                    
+                case "O", "o":
+                    state = .PO
+                    
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PI:
+                switch current {
+                case "N", "n":
+                    state = .PIN
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PIN:
+                switch current {
+                case "G", "g":
+                    state = .PING
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PING:
+                if current.isNewline {
+                    self.closure(.ping)
+                    self.reset()
+                } else {
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PO:
+                switch current {
+                case "N", "n":
+                    state = .PON
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PON:
+                switch current {
+                case "G", "g":
+                    state = .PONG
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PONG:
+                if current.isNewline {
+                    self.closure(.pong)
+                    self.reset()
+                } else {
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PLUS:
+                switch current {
+                case "O", "o":
+                    state = .PLUS_O
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PLUS_O:
+                switch current {
+                case "K", "k":
+                    state = .PLUS_OK
+                    
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .PLUS_OK:
+                if current.isNewline {
+                    closure(.ok)
+                    self.reset()
+                } else {
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MINUS:
+                switch current {
+                case "E", "e":
+                    state = .MINUS_E
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MINUS_E:
+                switch current {
+                case "R", "r":
+                    state = .MINUS_ER
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MINUS_ER:
+                switch current {
+                case "R", "r":
+                    state = .MINUS_ERR
+                default:
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MINUS_ERR:
+                if current.isSpace {
+                    state = .MINUS_ERR_ARG
+                } else {
+                    throw Error.unexpectedToken(current)
+                }
+                
+            case .MINUS_ERR_ARG:
+                if current.isNewline {
+                    self.closure(.error(buffer))
+                } else {
+                    self.buffer.append(current)
+                }
+            }
+        }
     }
     
-    private func parseOperator() throws -> Operator {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
-        }
-        
-        guard case .op(let op) = token else {
-            throw Error.unexpectedToken(token)
-        }
-        
-        return op
+    private func reset() {
+        self.state = .INITIAL
+        self.buffer = ""
+        self.argumentBuffer = [""]
     }
     
-    private func parseSubject() throws -> String {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
+    private func argument(_ buffer: [String]) throws {
+        if buffer.count == 3 {
+            subject = buffer[safe: 0]
+            sid = buffer[safe: 1]
+            bytes = Int(buffer[safe: 2] ?? "")
+            
+            return
         }
         
-        guard case let .string(subject) = token else {
-            throw Error.unexpectedToken(token)
+        if buffer.count == 4 {
+            subject = buffer[safe: 0]
+            sid = buffer[safe: 1]
+            request = buffer[safe: 2]
+            bytes = Int(buffer[safe: 3] ?? "")
+            
+            return
         }
         
-        return subject
+        throw Error.unexpectedArgumentCount
     }
     
-    private func parseReplyTo() throws -> String {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
+    private func message(_ buffer: String) throws {
+        guard let subject = self.subject else {
+            throw Error.missingArgument
         }
         
-        guard case let .string(replyTo) = token else {
-            throw Error.unexpectedToken(token)
+        guard let sid = self.sid else {
+            throw Error.missingArgument
         }
         
-        return replyTo
-    }
-    
-    private func parseSID() throws -> String {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
+        guard let bytes = self.bytes else {
+            throw Error.missingArgument
         }
         
-        guard case let .string(sid) = token else {
-            throw Error.unexpectedToken(token)
+        guard bytes == buffer.count else {
+            throw Error.parseError
         }
         
-        return sid
-    }
-    
-    private func parseBytes() throws -> Int {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
-        }
-        
-        guard case let .string(byteString) = token else {
-            throw Error.unexpectedToken(token)
-        }
-        
-        guard let bytes = Int(byteString) else {
-            throw Error.unexpectedToken(token)
-        }
-        
-        return bytes
-    }
-    
-    private func parsePayload() throws -> Data {
-        guard let token = currentToken else {
-            throw Error.unexpectedEOF
-        }
-        
-        guard case let .payload(payload) = token else {
-            throw Error.unexpectedToken(token)
-        }
-        
-        guard let data = payload.data(using: .utf8) else {
-            throw Error.unexpectedPayload(payload)
-        }
-        
-        return data
+        self.closure(.msg(subject: subject, sid: sid, request: self.request, bytes: bytes, payload: buffer))
     }
 }
