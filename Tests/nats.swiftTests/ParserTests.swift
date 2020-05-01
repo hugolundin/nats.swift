@@ -11,37 +11,40 @@ import Foundation
 
 final class ParserTests: XCTestCase {
     func testMessage() {
-        
         let msg = expectation(description: "The closure should be called for the parsed message.")
         let ping = expectation(description: "The closure should be called for the parsed ping.")
+        let pong = expectation(description: "The closure should be called for the parsed pong.")
         
         let parser = Parser() { message in
             switch message {
             case .ping:
                 ping.fulfill()
+            case .pong:
+                pong.fulfill()
             case .msg(_, _, _, _, _):
                 msg.fulfill()
             default:
                 break
             }
         }
+
+        try? parser.parse(input: "MSG test 123 ")
+        try? parser.parse(input: "7\r\n{'Hej'}\r\n")
+        try? parser.parse(input: "PING\r\n")
+        try? parser.parse(input: "PONG\r\n")
         
-        try? parser.parse(input: "MSG test 123 7\r\n{'Hej'}\r\nPING\r\n")
-        
-        waitForExpectations(timeout: 5) { error in
+        waitForExpectations(timeout: 1) { error in
             if let error = error {
                 XCTFail("waitForExpectations errored: \(error)")
             }
         }
     }
     
-    
-    
     func testPing() {
         let closure = expectation(description: "The closure should be called.")
         
         let parser = Parser() { message in
-            // XCTAssert(message == .ping)
+            XCTAssert(message == .ping)
             closure.fulfill()
         }
         
@@ -56,7 +59,7 @@ final class ParserTests: XCTestCase {
     
     func testPong() {
         let parser = Parser() { message in
-            // XCTAssertTrue(message == .pong)
+            XCTAssertTrue(message == .pong)
         }
         
         try? parser.parse(input: "PONG\r\n")

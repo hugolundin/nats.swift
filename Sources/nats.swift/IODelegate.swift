@@ -19,3 +19,5 @@ import Foundation
  2. A message is received. This is indicated from the users side by calling `receive` on something.
  3. `request` is called. This will also call `send` on the delegate, with a buffer prepared for a request.
  */
+
+

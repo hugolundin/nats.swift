@@ -50,7 +50,7 @@ internal final class Parser {
         case missingArgument
     }
     
-    internal enum Message {
+    internal enum Message: Equatable {
         case ping
         case pong
         case msg(subject: String, sid: String, request: String? = nil, bytes: Int, payload: String)
@@ -59,11 +59,11 @@ internal final class Parser {
         case error(String)
     }
     
-    typealias Closure = (Message) -> Void
+    internal typealias Closure = (Message) -> Void
     
     private var state: State
     private var buffer: String
-    private var closure: Closure
+    internal var closure: Closure?
     private var argumentBuffer = [""]
     
     private var subject: String? = nil
@@ -71,14 +71,13 @@ internal final class Parser {
     private var request: String? = nil
     private var bytes: Int? = nil
     
-    internal init(state: State = .INITIAL, _ closure: @escaping Closure) {
+    internal init(state: State = .INITIAL, _ closure: Closure? = nil) {
         self.state = state
         self.buffer = ""
         self.closure = closure
     }
     
     internal func parse(input: String) throws {
-
         for current in input {
             switch state {
             case .INITIAL:
@@ -135,7 +134,7 @@ internal final class Parser {
                 
             case .INFO_ARG:
                 if current.isNewline {
-                    self.closure(.info(buffer))
+                    self.closure?(.info(buffer))
                 } else {
                     self.buffer.append(current)
                 }
@@ -211,7 +210,7 @@ internal final class Parser {
                 
             case .PING:
                 if current.isNewline {
-                    self.closure(.ping)
+                    self.closure?(.ping)
                     self.reset()
                 } else {
                     throw Error.unexpectedToken(current)
@@ -235,7 +234,7 @@ internal final class Parser {
                 
             case .PONG:
                 if current.isNewline {
-                    self.closure(.pong)
+                    self.closure?(.pong)
                     self.reset()
                 } else {
                     throw Error.unexpectedToken(current)
@@ -260,7 +259,7 @@ internal final class Parser {
                 
             case .PLUS_OK:
                 if current.isNewline {
-                    closure(.ok)
+                    closure?(.ok)
                     self.reset()
                 } else {
                     throw Error.unexpectedToken(current)
@@ -299,7 +298,7 @@ internal final class Parser {
                 
             case .MINUS_ERR_ARG:
                 if current.isNewline {
-                    self.closure(.error(buffer))
+                    self.closure?(.error(buffer))
                 } else {
                     self.buffer.append(current)
                 }
@@ -351,6 +350,6 @@ internal final class Parser {
             throw Error.parseError
         }
         
-        self.closure(.msg(subject: subject, sid: sid, request: self.request, bytes: bytes, payload: buffer))
+        self.closure?(.msg(subject: subject, sid: sid, request: self.request, bytes: bytes, payload: buffer))
     }
 }
