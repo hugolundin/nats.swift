@@ -8,7 +8,7 @@ A Swift library for using the NATS protocol.
 
 `nats.swift` is still in an early development stage, but some of the planned features are:
 - [ ] A robust NATS client protocol parser.
-    - [ ] Support for partial reads
+    - [x] Support for partial reads
 - [ ] An I/O-free client library.
     * The user provides callbacks for I/O interactions while this library is simply responsible for handling NATS (inspired by wslay).
     * The user can provide an optional context that is passed with all callbacks. 
