@@ -12,15 +12,10 @@ public protocol IODelegate {
 }
 
 public class NATS {
-    private struct Subscriber {
-        let subject: String
-        let closure: (Message) -> Void
-    }
-    
     public enum Error: Swift.Error {
         
     }
-    
+  
     public struct Message {
         let subject: String
         let sid: String
@@ -29,11 +24,18 @@ public class NATS {
         let payload: String
     }
     
+    private struct Subscription {
+        var maxMessages: Int?
+        let closure: (Message) -> Void
+    }
+    
+    private var sid: Int
     private let parser: Parser
-    private let delegate: IODelegate?
-    private var subscribers = [Subscriber]()
+    public var delegate: IODelegate?
+    private var subscribers = [String : Subscription]()
     
     public init(delegate: IODelegate? = nil) {
+        self.sid = 0
         self.delegate = delegate
         self.parser = Parser()
         self.parser.closure = self.closure
@@ -42,22 +44,26 @@ public class NATS {
     private func closure(_ message: Parser.Message) {
         switch message {
         case .ping:
-            break
+            delegate?.send("PONG\r\n")
         case .pong:
-            break
+            print("closure: pong!")
         case .msg(let subject, let sid, let request, let bytes, let payload):
             let message = Message(subject: subject, sid: sid, request: request, bytes: bytes, payload: payload)
             
-            for subscriber in subscribers {
-                guard subscriber.subject == subject else {
-                    continue
+            if let subscription = self.subscribers[message.sid] {
+                if let count = subscription.maxMessages {
+                    if count - 1 == 0 {
+                        self.subscribers.removeValue(forKey: message.sid)
+                    } else {
+                        self.subscribers[message.sid]?.maxMessages = count - 1
+                    }
                 }
                 
-                subscriber.closure(message)
+                subscription.closure(message)
             }
             
-        case .info(_):
-            break
+        case .info(let payload):
+            print("closure info: \(payload)")
         case .ok:
             break
         case .error(_):
@@ -77,8 +83,29 @@ public class NATS {
         }
     }
     
-    public func subscribe(subject: String, _ closure: @escaping (Message) -> Void) {
-        subscribers.append(Subscriber(subject: subject, closure: closure))
+    @discardableResult
+    public func subscribe(subject: String, _ closure: @escaping (Message) -> Void) -> String {
+        let sid = generateSID()
+        subscribers[sid] = Subscription(maxMessages: nil, closure: closure)
+        delegate?.send("SUB \(subject) \(sid)\r\n")
+        
+        return sid
+    }
+    
+    public func unsubscribe(sid: String, maxMessages: Int?) {
+        subscribers[sid]?.maxMessages = maxMessages
+    
+        if let maxMessages = maxMessages {
+            delegate?.send("UNSUB \(sid) \(maxMessages)\r\n")
+        } else {
+            delegate?.send("UNSUB \(sid)\r\n")
+        }
+    }
+    
+    private func generateSID() -> String {
+        let sid = String(self.sid)
+        self.sid += 1
+        return sid
     }
     
     public func request() {
