@@ -1,5 +1,5 @@
 //
-//  NATSParser.swift
+//  Parser.swift
 //  nats.swift
 //
 //  Created by Hugo Lundin on 2020-04-27.
@@ -135,6 +135,7 @@ internal final class Parser {
             case .INFO_ARG:
                 if current.isNewline {
                     self.closure?(.info(buffer))
+                    self.reset()
                 } else {
                     self.buffer.append(current)
                 }
@@ -306,7 +307,7 @@ internal final class Parser {
         }
     }
     
-    private func reset() {
+    public func reset() {
         self.state = .INITIAL
         self.buffer = ""
         self.argumentBuffer = [""]
