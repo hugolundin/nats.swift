@@ -7,45 +7,42 @@
 
 import Foundation
 
+extension NATS {
+    internal class Subscription {
+        var maxMessages: Int?
+        var receivedMessages = 0
+        let receive: (Message) -> Void
+        
+        internal init(receive: @escaping (Message) -> Void) {
+            self.receive = receive
+        }
+    }
+}
+
 public class NATS {
-    private var sid: Int
     private let parser: Parser
+    private var subscriptions = [String : Subscription]()
     
+    
+    /// Delegate.
     public var delegate: ConnectionDelegate?
-    private var subscribers = [String : Subscription]()
     
     public init(delegate: ConnectionDelegate.Type = DefaultConnectionDelegate.self) {
-        self.sid = 0
         self.parser = Parser()
         self.parser.closure = self.closure
         self.delegate = delegate.init(receive: receive)
     }
     
-    private func closure(_ message: Parser.Message) {
+    private func closure(_ message: Parser.Incoming) {
         switch message {
         case .ping:
-            delegate?.send("PONG\r\n")
-            print("sending pong")
+            self.pong()
         case .pong:
-            print("closure: pong!")
-        case .msg(let subject, let sid, let request, let bytes, let payload):
-            let message = Message(subject: subject, sid: sid, request: request, bytes: bytes, payload: payload)
-            
-            if let subscription = self.subscribers[message.sid] {
-                if let count = subscription.maxMessages {
-                    if count - 1 == 0 {
-                        self.subscribers.removeValue(forKey: message.sid)
-                    } else {
-                        self.subscribers[message.sid]?.maxMessages = count - 1
-                    }
-                }
-                
-                subscription.closure(message)
-            }
-            
-        case .info(let data):
-            self.handle(info: data)
-
+            self.ping()
+        case .msg(let message):
+            self.msg(message)
+        case .info(let payload):
+            self.info(payload)
         case .ok:
             break
         case .error(_):
@@ -71,31 +68,46 @@ public class NATS {
     }
     
     @discardableResult
-    public func subscribe(subject: String, _ closure: @escaping (Message) -> Void) -> String {
-        let sid = generateSID()
-        subscribers[sid] = Subscription(maxMessages: nil, closure: closure)
+    public func subscribe(subject: String, _ receive: @escaping (Message) -> Void) -> String {
+        let sid = generateSubscriptionId()
         delegate?.send("SUB \(subject) \(sid)\r\n")
-        
+        subscriptions[sid] = Subscription(receive: receive)
         return sid
     }
     
-    public func unsubscribe(sid: String, maxMessages: Int?) {
-        subscribers[sid]?.maxMessages = maxMessages
-    
+    public func unsubscribe(sid: String, maxMessages: Int? = nil) {
+        guard let subscription = subscriptions[sid] else {
+            // TODO: Log error.
+            return
+        }
+        
         if let maxMessages = maxMessages {
             delegate?.send("UNSUB \(sid) \(maxMessages)\r\n")
+            subscription.maxMessages = maxMessages
         } else {
             delegate?.send("UNSUB \(sid)\r\n")
+            subscriptions.removeValue(forKey: sid)
         }
     }
     
-    private func generateSID() -> String {
-        let sid = String(self.sid.hex)
-        self.sid += 1
-        return sid
+    private func msg(_ message: Message) {
+        guard let subscription = subscriptions[message.sid] else {
+            // TODO: Log error.
+            return
+        }
+        
+        subscription.receive(message)
+        
+        if let maxMessages = subscription.maxMessages {
+            if maxMessages == 1 {
+                self.unsubscribe(sid: message.sid)
+            } else {
+                subscription.maxMessages = maxMessages - 1
+            }
+        }
     }
     
-    private func handle(info: String) {
+    private func info(_ info: String) {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
@@ -132,16 +144,32 @@ public class NATS {
         }
     }
     
-    public func request() {
+    public func request(subject: String, payload: String = "", _ receive: @escaping (Message) -> Void) {
+        let inbox = generateInboxSubject()
+        let sid = subscribe(subject: inbox, receive)
         
+        unsubscribe(sid: sid, maxMessages: 1)
+        publish(subject: subject, payload: payload, replyTo: inbox)
     }
     
     public func ping() {
-        
+        delegate?.send("PONG\r\n")
     }
     
     public func pong() {
-        
+        delegate?.send("PONG\r\n")
+    }
+    
+    private var subscriptionIdCounter = 0
+    
+    private func generateSubscriptionId() -> String {
+        let sid = String(subscriptionIdCounter.hex)
+        subscriptionIdCounter += 1
+        return sid
+    }
+    
+    private func generateInboxSubject() -> String {
+        return "INBOX.123123123123.123"
     }
 }
 

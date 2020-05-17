@@ -50,16 +50,16 @@ internal final class Parser {
         case missingArgument
     }
     
-    internal enum Message: Equatable {
+    internal enum Incoming: Equatable {
         case ping
         case pong
-        case msg(subject: String, sid: String, request: String? = nil, bytes: Int, payload: String)
+        case msg(Message)
         case info(String)
         case ok
         case error(String)
     }
     
-    internal typealias Closure = (Message) -> Void
+    internal typealias Closure = (Incoming) -> Void
     
     private var state: State
     private var buffer: String
@@ -68,7 +68,7 @@ internal final class Parser {
     
     private var subject: String? = nil
     private var sid: String? = nil
-    private var request: String? = nil
+    private var replyTo: String? = nil
     private var bytes: Int? = nil
     
     internal init(state: State = .INITIAL, _ closure: Closure? = nil) {
@@ -325,7 +325,7 @@ internal final class Parser {
         if buffer.count == 4 {
             subject = buffer[safe: 0]
             sid = buffer[safe: 1]
-            request = buffer[safe: 2]
+            replyTo = buffer[safe: 2]
             bytes = Int(buffer[safe: 3] ?? "")
             
             return
@@ -351,6 +351,6 @@ internal final class Parser {
             throw Error.parseError
         }
         
-        self.closure?(.msg(subject: subject, sid: sid, request: self.request, bytes: bytes, payload: buffer))
+        self.closure?(.msg(Message(subject: subject, sid: sid, replyTo: replyTo, bytes: bytes, payload: buffer)))
     }
 }
