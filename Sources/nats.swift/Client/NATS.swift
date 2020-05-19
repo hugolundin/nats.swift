@@ -7,18 +7,6 @@
 
 import Foundation
 
-extension NATS {
-    internal class Subscription {
-        var maxMessages: Int?
-        var receivedMessages = 0
-        let receive: (Message) -> Void
-        
-        internal init(receive: @escaping (Message) -> Void) {
-            self.receive = receive
-        }
-    }
-}
-
 public class NATS {
     private let parser: Parser
     private var subscriptions = [String : Subscription]()
@@ -27,13 +15,14 @@ public class NATS {
     /// Delegate.
     public var delegate: ConnectionDelegate?
     
-    public init(delegate: ConnectionDelegate.Type = DefaultConnectionDelegate.self) {
+    public init(delegate: ConnectionDelegate = DefaultConnectionDelegate()) {
         self.parser = Parser()
-        self.parser.closure = self.closure
-        self.delegate = delegate.init(receive: receive)
+        self.parser.closure = self.dispatch
+        self.delegate = delegate
+        self.delegate?.receive = self.receive
     }
     
-    private func closure(_ message: Parser.Incoming) {
+    private func dispatch(_ message: Parser.Incoming) {
         switch message {
         case .ping:
             self.pong()
@@ -50,7 +39,7 @@ public class NATS {
         }
     }
     
-    public func receive(buffer: String) {
+    private func receive(buffer: String) {
         do {
             try parser.parse(input: buffer)
         } catch {
@@ -119,13 +108,13 @@ public class NATS {
             return
         }
         
-        guard let infoOptions = try? decoder.decode(InfoOptions.self, from: infoData) else {
+        guard let infoOptions = try? decoder.decode(Options.Info.self, from: infoData) else {
             return
         }
 
         print(infoOptions)
         
-        guard let connectData = try? encoder.encode(ConnectOptions()) else {
+        guard let connectData = try? encoder.encode(Options.Connect()) else {
             return
         }
         
@@ -153,7 +142,7 @@ public class NATS {
     }
     
     public func ping() {
-        delegate?.send("PONG\r\n")
+        delegate?.send("PING\r\n")
     }
     
     public func pong() {
@@ -171,33 +160,4 @@ public class NATS {
     private func generateInboxSubject() -> String {
         return "INBOX.123123123123.123"
     }
-}
-
-internal struct ConnectOptions: Codable {
-    let verbose: Bool = false
-    let pedantic: Bool = false
-    let tlsRequired: Bool? = nil
-    let authToken: String? = nil
-    let user: String? = nil
-    let pass: String? = nil
-    let name = "swift.nats"
-    let lang = "swift"
-    let version = "0.1"
-    let `protocol` = 0
-    let echo: Bool = false
-}
-
-internal struct InfoOptions: Codable {
-    let serverId: String? = nil
-    let version: String? = nil
-    let go: String? = nil
-    let host: String? = nil
-    let port: Int? = nil
-    let maxPayload: Int? = nil
-    let proto: Int? = nil
-    let clientId: Int? = nil
-    let authRequired: Bool? = nil
-    let tlsRequired: Bool? = nil
-    let tlsVerify: Bool? = nil
-    let connectUrls: [String]? = nil
 }

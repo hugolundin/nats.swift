@@ -9,13 +9,12 @@ import Foundation
 import Network
 
 public final class DefaultConnectionDelegate: ConnectionDelegate {
-
     private var connection: Connection?
-    private let receive: (String) -> Void
+    public var receive: ((String) -> Void)?
     
-    public init(receive: @escaping ((String) -> Void)) {
+    public init() {
         self.connection = nil
-        self.receive = receive
+        self.receive = nil
     }
     
     public func send(_ buffer: String) {
@@ -31,7 +30,7 @@ public final class DefaultConnectionDelegate: ConnectionDelegate {
             return
         }
         
-        self.receive(payload)
+        self.receive?(payload)
     }
     
     public func connect(host: String, port: Int, _ closure: @escaping () -> Void) {

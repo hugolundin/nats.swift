@@ -7,11 +7,12 @@
 
 import Foundation
 
-public struct Message: Hashable {
-    let id = UUID()
+public struct Message {
     public let subject: String
     public let sid: String
     public let replyTo: String?
     public let bytes: Int
     public let payload: String
 }
+
+extension Message: Hashable {}
