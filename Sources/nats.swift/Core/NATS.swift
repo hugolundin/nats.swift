@@ -11,7 +11,6 @@ public class NATS {
     private let parser: Parser
     private var subscriptions = [String : Subscription]()
     
-    
     /// Delegate.
     public var delegate: ConnectionDelegate?
     

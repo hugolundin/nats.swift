@@ -7,23 +7,6 @@
 
 import Foundation
 
-// Interaction between the NATS client and
-// the `ConnectionDelegate`:
-//
-//             ┌────────┐
-//     ┌──────▶│  NATS  │────────┐
-//     │       └────────┘        │
-//     │                     ┌───┴───┐
-// ┌───┴───┐                 │Connect│
-// │Receive│                 └───┬───┘
-// └───┬───┘                 ┌───┴───┐
-//     │                     │ Send  │
-//     │                     └───┬───┘
-//     │  ┌───────────────────┐  │
-//     └──│ConnectionDelegate │◀─┘
-//        └───────────────────┘
-//
-
 /// A user of `swift.nats` can replace the default connection implementation with
 /// its own by implementing this protocol. `nats.swift` will call its functions while
 /// running.

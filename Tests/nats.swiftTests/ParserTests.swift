@@ -21,7 +21,7 @@ final class ParserTests: XCTestCase {
                 ping.fulfill()
             case .pong:
                 pong.fulfill()
-            case .msg(_, _, _, _, _):
+            case .msg(_):
                 msg.fulfill()
             default:
                 break
@@ -84,11 +84,4 @@ final class ParserTests: XCTestCase {
             }
         }
     }
-    
-    static var allTests = [
-        ("testMessage", testMessage),
-        ("testPing", testPing),
-        ("testPong", testPong),
-        ("testError", testError)
-    ]
 }
