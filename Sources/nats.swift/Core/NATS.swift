@@ -71,10 +71,6 @@ public class NATS {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        encoder.outputFormatting = .prettyPrinted
-        
         guard let infoData = info.data(using: .utf8) else {
             return
         }
@@ -83,19 +79,9 @@ public class NATS {
             return
         }
 
-        // print(infoOptions)
-        
-        guard let connectData = try? encoder.encode(Options.Connect()) else {
-            return
+        if let connect = generator.connect() {
+            connection?.send(connect)
         }
-        
-        guard let connect = String(data: connectData, encoding: .utf8) else {
-            return
-        }
-
-        // os_log("\(connect, privacy: .public)")
-        
-        // delegate?.send("CONNECT \(connect)")
     }
     
     public func connect(_ closure: @escaping (Result<Void, Error>) -> Void) {
@@ -105,10 +91,75 @@ public class NATS {
     }
     
     public func ping() {
-        connection?.send("PING\r\n")
+        connection?.send(generator.ping())
     }
     
     public func pong() {
-        connection?.send("PONG\r\n")
+        connection?.send(generator.pong())
+    }
+    
+    public func publish(subject: String, payload: String = "", replyTo: String = "") {
+        connection?.send(generator.publish(subject: subject, payload: payload, replyTo: replyTo))
+    }
+    
+    public func request(
+        subject: String,
+        payload: String = "",
+        timeout: TimeInterval = 0.05,
+        _ receive: @escaping (Message) -> Void)
+    {
+        let inbox = generator.inboxSubject()
+        let ssid = subscribe(subject: inbox, timeout: timeout, receive)
+
+        unsubscribe(ssid: ssid, maxMessages: 1)
+        publish(subject: subject, payload: payload, replyTo: inbox)
+    }
+    
+    @discardableResult
+    public func subscribe(
+        subject: String,
+        timeout: TimeInterval? = nil,
+        _ receive: @escaping (Message) -> Void) -> String
+    {
+        let ssid = generator.subscriptionID()
+        
+        connection?.send(generator.subscribe(subject: subject, ssid: ssid))
+        subscriptions[ssid] = (subscription: Subscription(receive: receive), nil)
+        
+        if let timeout = timeout {
+            subscriptions[ssid]?.timer = Timer.scheduledTimer(
+                timeInterval: timeout,
+                target: self,
+                selector: #selector(self.timeout),
+                userInfo: ssid,
+                repeats: false
+            )
+        }
+        
+        return ssid
+    }
+    
+    @objc private func timeout(sender: Timer) {
+        guard let ssid = sender.userInfo as? String else {
+            os_log("Unable to cast sender.userInfo to String")
+            return
+        }
+        
+        self.unsubscribe(ssid: ssid, maxMessages: nil)
+    }
+    
+    public func unsubscribe(ssid: String, maxMessages: Int? = nil) {
+        guard let subscription = subscriptions[ssid]?.subscription else {
+            os_log("A subscription with ssid \(ssid, privacy: .sensitive) does not exist.")
+            return
+        }
+        
+        if let maxMessages = maxMessages {
+            subscription.maxMessages = maxMessages
+        } else {
+            subscriptions.removeValue(forKey: ssid)
+        }
+        
+        connection?.send(generator.unsubscribe(ssid: ssid, maxMessages: maxMessages))
     }
 }
