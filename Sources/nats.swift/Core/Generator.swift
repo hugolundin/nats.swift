@@ -73,13 +73,11 @@ internal final class Generator {
         }
     }
     
-    internal func subscribe(subject: String, ssid: String
-    ) -> String {
+    internal func subscribe(subject: String, ssid: String) -> String {
         "SUB \(subject) \(ssid)\r\n"
     }
     
     internal func unsubscribe(ssid: String, maxMessages: Int?) -> String {
-        
         if let maxMessages = maxMessages {
             return "UNSUB \(ssid) \(maxMessages)\r\n"
         } else {
