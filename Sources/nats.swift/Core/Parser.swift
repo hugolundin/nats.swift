@@ -67,7 +67,7 @@ internal final class Parser {
     private var argumentBuffer = [""]
     
     private var subject: String? = nil
-    private var sid: String? = nil
+    private var ssid: String? = nil
     private var replyTo: String? = nil
     private var bytes: Int? = nil
     
@@ -316,7 +316,7 @@ internal final class Parser {
     private func argument(_ buffer: [String]) throws {
         if buffer.count == 3 {
             subject = buffer[safe: 0]
-            sid = buffer[safe: 1]
+            ssid = buffer[safe: 1]
             bytes = Int(buffer[safe: 2] ?? "")
             
             return
@@ -324,7 +324,7 @@ internal final class Parser {
         
         if buffer.count == 4 {
             subject = buffer[safe: 0]
-            sid = buffer[safe: 1]
+            ssid = buffer[safe: 1]
             replyTo = buffer[safe: 2]
             bytes = Int(buffer[safe: 3] ?? "")
             
@@ -339,7 +339,7 @@ internal final class Parser {
             throw Error.missingArgument
         }
         
-        guard let sid = self.sid else {
+        guard let ssid = self.ssid else {
             throw Error.missingArgument
         }
         
@@ -351,6 +351,6 @@ internal final class Parser {
             throw Error.parseError
         }
         
-        self.closure?(.msg(Message(subject: subject, sid: sid, replyTo: replyTo, bytes: bytes, payload: buffer)))
+        self.closure?(.msg(Message(subject: subject, ssid: ssid, replyTo: replyTo, bytes: bytes, payload: buffer)))
     }
 }

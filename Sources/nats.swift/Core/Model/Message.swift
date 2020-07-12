@@ -9,7 +9,7 @@ import Foundation
 
 public struct Message {
     public let subject: String
-    public let sid: String
+    public let ssid: String
     public let replyTo: String?
     public let bytes: Int
     public let payload: String
