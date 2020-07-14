@@ -8,6 +8,11 @@
 import Foundation
 
 internal final class Generator {
+    internal enum Error: Swift.Error {
+        case emptySubject
+        case emptySSID
+    }
+    
     private var ssid: Int = 0
     
     /// Generate a new subscription ID.
@@ -44,7 +49,6 @@ internal final class Generator {
     internal func connect() -> String? {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
-        encoder.outputFormatting = .prettyPrinted
         
         guard let data = try? encoder.encode(Options.Connect()) else {
             return nil
@@ -53,8 +57,8 @@ internal final class Generator {
         guard let connect = String(data: data, encoding: .utf8) else {
             return nil
         }
-        
-        return "CONNECT \(connect)"
+                
+        return "CONNECT \(connect)\r\n"
     }
     
     internal func ping() -> String {
@@ -65,11 +69,15 @@ internal final class Generator {
         "PONG\r\n"
     }
     
-    internal func publish(subject: String, payload: String, replyTo: String) -> String {
+    internal func publish(subject: String, payload: String, replyTo: String) -> Result<String, Error> {
+        guard subject.count > 0 else {
+            return .failure(.emptySubject)
+        }
+        
         if replyTo.count > 0 {
-            return "PUB \(subject) \(replyTo) \(payload.count)\r\n\(payload)\r\n"
+            return .success("PUB \(subject) \(replyTo) \(payload.count)\r\n\(payload)\r\n")
         } else {
-            return "PUB \(subject) \(payload.count)\r\n\(payload)\r\n"
+            return .success("PUB \(subject) \(payload.count)\r\n\(payload)\r\n")
         }
     }
     

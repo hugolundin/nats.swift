@@ -9,6 +9,28 @@ import Foundation
 import os.log
 
 public class NATS {
+    
+    
+    
+    public enum SubscribeError: Swift.Error {
+        
+    }
+    
+    public enum PublishError: Swift.Error {
+        
+    }
+    
+    public enum RequestError: Swift.Error {
+        
+    }
+    
+    
+    public enum Error: Swift.Error {
+        
+        case unknownSubject
+        case invalidTimeout
+    }
+    
     public var connection: ConnectionDelegate?
     
     private let parser: Parser
@@ -52,7 +74,7 @@ public class NATS {
     
     private func msg(_ message: Message) {
         guard let subscription = subscriptions[message.ssid]?.subscription else {
-            os_log("A subscription with ssid \(message.ssid, privacy: .sensitive) does not exist.")
+            os_log("A subscription with ssid %@ does not exist.", message.ssid)
             return
         }
         
@@ -71,13 +93,15 @@ public class NATS {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
-        guard let infoData = info.data(using: .utf8) else {
+        guard let data = info.data(using: .utf8) else {
             return
         }
         
-        guard let infoOptions = try? decoder.decode(Options.Info.self, from: infoData) else {
+        guard let options = try? decoder.decode(Options.Info.self, from: data) else {
             return
         }
+        
+        os_log("Connected to %@:%@", options.host ?? "0.0.0.0", String(describing: options.port ?? 4222))
 
         if let connect = generator.connect() {
             connection?.send(connect)
@@ -98,28 +122,61 @@ public class NATS {
         connection?.send(generator.pong())
     }
     
-    public func publish(subject: String, payload: String = "", replyTo: String = "") {
-        connection?.send(generator.publish(subject: subject, payload: payload, replyTo: replyTo))
+    @discardableResult
+    public func publish(subject: String, payload: String = "", replyTo: String = "") -> Result<Void, Error> {
+        let result = generator.publish(subject: subject, payload: payload, replyTo: replyTo)
+        
+        switch result {
+        case .success(let message):
+            connection?.send(message)
+        case .failure(let error):
+            switch error {
+            case .emptySSID:
+                return .failure(.internal)
+            case .emptySubject:
+                return .failure(.emptySubject)
+            }
+        }
+        
+        return .success(())
     }
     
+    @discardableResult
     public func request(
         subject: String,
         payload: String = "",
         timeout: TimeInterval = 0.05,
-        _ receive: @escaping (Message) -> Void)
+        _ receive: @escaping (Message) -> Void) -> Result<Void, Error>
     {
+        guard subject.count > 0 else {
+            return .failure(.emptySubject)
+        }
+        
+        guard timeout > 0 else {
+            return .failure(<#T##Error#>)
+        }
+        
         let inbox = generator.inboxSubject()
-        let ssid = subscribe(subject: inbox, timeout: timeout, receive)
+        let result = subscribe(subject: inbox, timeout: timeout, receive)
+        
+        switch result {
+        case .success(let ssid):
+            unsubscribe(ssid: ssid, maxMessages: 1)
+            publish(subject: subject, payload: payload, replyTo: inbox)
+        case .failure(let error):
+            switch error {
+            case.unknownSubject
+            }
+        }
 
-        unsubscribe(ssid: ssid, maxMessages: 1)
-        publish(subject: subject, payload: payload, replyTo: inbox)
+        return .success(())
     }
     
     @discardableResult
     public func subscribe(
         subject: String,
         timeout: TimeInterval? = nil,
-        _ receive: @escaping (Message) -> Void) -> String
+        _ receive: @escaping (Message) -> Void) -> Result<String, Error>
     {
         let ssid = generator.subscriptionID()
         
@@ -136,7 +193,7 @@ public class NATS {
             )
         }
         
-        return ssid
+        return .success(ssid)
     }
     
     @objc private func timeout(sender: Timer) {
@@ -150,7 +207,7 @@ public class NATS {
     
     public func unsubscribe(ssid: String, maxMessages: Int? = nil) {
         guard let subscription = subscriptions[ssid]?.subscription else {
-            os_log("A subscription with ssid \(ssid, privacy: .sensitive) does not exist.")
+            os_log("A subscription with ssid %@) does not exist.", ssid)
             return
         }
         
