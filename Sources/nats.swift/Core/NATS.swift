@@ -13,7 +13,7 @@ public class NATS {
     
     
     public enum SubscribeError: Swift.Error {
-        
+        case test
     }
     
     public enum PublishError: Swift.Error {
