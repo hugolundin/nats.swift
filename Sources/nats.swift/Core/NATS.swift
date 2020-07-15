@@ -9,24 +9,9 @@ import Foundation
 import os.log
 
 public class NATS {
-    
-    
-    
-    public enum SubscribeError: Swift.Error {
-        case test
-    }
-    
-    public enum PublishError: Swift.Error {
-        
-    }
-    
-    public enum RequestError: Swift.Error {
-        
-    }
-    
-    
     public enum Error: Swift.Error {
-        
+        case `internal`
+        case emptySubject
         case unknownSubject
         case invalidTimeout
     }
@@ -37,7 +22,19 @@ public class NATS {
     private let generator: Generator
     private var subscriptions = [String : (subscription: Subscription, timer: Timer?)]()
     
-    public init(connection: ConnectionDelegate = DefaultConnectionDelegate()) {
+    public static func connect(
+        host: String = "localhost",
+        port: Int = 4222,
+        connection: ConnectionDelegate = DefaultConnectionDelegate(),
+        _ closure: @escaping (Result<NATS, Error>) -> Void)
+    {
+        let nats = NATS(connection: connection)
+        nats.connection?.connect(host: host, port: port) {
+            closure(.success(nats))
+        }
+    }
+    
+    private init(connection: ConnectionDelegate) {
         self.connection = connection
         self.parser = Parser()
         self.generator = Generator()
@@ -108,12 +105,6 @@ public class NATS {
         }
     }
     
-    public func connect(_ closure: @escaping (Result<Void, Error>) -> Void) {
-        connection?.connect(host: "localhost", port: 4222) {
-            closure(.success(()))
-        }
-    }
-    
     public func ping() {
         connection?.send(generator.ping())
     }
@@ -124,6 +115,10 @@ public class NATS {
     
     @discardableResult
     public func publish(subject: String, payload: String = "", replyTo: String = "") -> Result<Void, Error> {
+        guard subject.count > 0 else {
+            return .failure(.emptySubject)
+        }
+        
         let result = generator.publish(subject: subject, payload: payload, replyTo: replyTo)
         
         switch result {
@@ -153,7 +148,7 @@ public class NATS {
         }
         
         guard timeout > 0 else {
-            return .failure(<#T##Error#>)
+            return .failure(.invalidTimeout)
         }
         
         let inbox = generator.inboxSubject()
@@ -163,10 +158,9 @@ public class NATS {
         case .success(let ssid):
             unsubscribe(ssid: ssid, maxMessages: 1)
             publish(subject: subject, payload: payload, replyTo: inbox)
+            
         case .failure(let error):
-            switch error {
-            case.unknownSubject
-            }
+            return .failure(error)
         }
 
         return .success(())
